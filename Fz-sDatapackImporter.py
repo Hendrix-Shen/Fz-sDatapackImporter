@@ -16,7 +16,10 @@ class fzsDatapackImporter():
     def saveDefaultConfig(self):
         defaultConfig = {
             'global': {
-                'mode': 'whitelist'
+                'commandPrefix': '!!fdi',
+                'mode': 'whitelist',
+                'serverPath': '/server',
+                'worldName': 'world'
             },
             'commandPermissions': {
                 'help': 0,
@@ -30,7 +33,8 @@ class fzsDatapackImporter():
         return os.path.basename(__file__).replace(".py", "")
 
     def getPlayerStatsData(self, uuid, classification, target):
-        uuidFilePath = './server/world/stats/{}.json'.format(uuid)
+        config = self.loadJson('./plugins/{}/config.json'.format(self.getSelfName()))
+        uuidFilePath = '.{}/{}/stats/{}.json'.format(config['global']['serverPath'], config['global']['worldName'], uuid)
         if (os.path.isfile(uuidFilePath)):
             data = self.loadJson(uuidFilePath)
             if ('minecraft:{}'.format(classification) in data['stats']):
@@ -39,8 +43,9 @@ class fzsDatapackImporter():
         return None
 
     def refreshUUID(self):
+        config = self.loadJson('./plugins/{}/config.json'.format(self.getSelfName()))
         for i in {'usercache', 'whitelist'}:
-            t = self.loadJson('./server/{}.json'.format(i))
+            t = self.loadJson('.{}/{}.json'.format(config['global']['serverPath'], i))
             r = {}
             for k in t: 
                 r[k['name']] =  k['uuid']
@@ -61,118 +66,47 @@ class fzsDatapackImporter():
         else:
             return None
 
-    def syncKillCounter(self, server):
+    def __sync(self, server, classification, targetList, scoreboardOjbect, totalScoreName, isAct = False):
         r = self.loadUUID()
         if (r):
             total = 0
             for i in r:
                 data = 0
-                for k in {'mob_kills', 'player_kills'}:
-                    if(self.getPlayerStatsData(r[i], 'custom', k)):
-                        data += self.getPlayerStatsData(r[i], 'custom', k)
-                server.execute('scoreboard players set {} {} {}'.format(i, 'killCounter', data))
-                total = total + data
-            server.execute('scoreboard players set {} {} {}'.format('总击杀数', 'totalList', total))
+                for k in targetList:
+                    if(self.getPlayerStatsData(r[i], classification, k)):
+                        data += self.getPlayerStatsData(r[i], classification, k)
+                if (isAct):
+                    server.execute('scoreboard players set {} {} {}'.format(i, 'actCounter', data % 72000))
+                    server.execute('scoreboard players set {} {} {}'.format(i, 'activation', data // 72000))
+                    total = total + data // 72000
+                else:
+                    server.execute('scoreboard players set {} {} {}'.format(i, scoreboardOjbect, data))
+                    total = total + data
+            server.execute('scoreboard players set {} {} {}'.format(totalScoreName, 'totalList', total))
             return True
         else:
             return False
+        
+    def syncKillCounter(self, server):
+        return self.__sync(server, 'custom', {'mob_kills', 'player_kills'}, 'killCounter', '总击杀数')
 
     def syncDigCounter(self, server):
-        r = self.loadUUID()
-        if (r):
-            total = 0
-            for i in r:
-                data = 0
-                for k in {'diamond_axe', 'diamond_pickaxe', 'diamond_shovel', 'iron_axe', 'iron_pickaxe', 'iron_shovel', 'stone_axe', 'stone_pickaxe', 'stone_shovel'}:
-                    if(self.getPlayerStatsData(r[i], 'used', k)):
-                        data += self.getPlayerStatsData(r[i], 'used', k)
-                server.execute('scoreboard players set {} {} {}'.format(i, 'digCounter', data))
-                total = total + data
-            server.execute('scoreboard players set {} {} {}'.format('总挖掘数', 'totalList', total))
-            return True
-        else:
-            return False
+        return self.__sync(server,'used', {'diamond_axe', 'diamond_pickaxe', 'diamond_shovel', 'iron_axe', 'iron_pickaxe', 'iron_shovel', 'stone_axe', 'stone_pickaxe', 'stone_shovel'}, 'digCounter', '总挖掘数')
 
     def syncDeathCounter(self, server):
-        r = self.loadUUID()
-        if (r):
-            total = 0
-            for i in r:
-                data = 0
-                for k in {'deaths'}:
-                    if(self.getPlayerStatsData(r[i], 'custom', k)):
-                        data += self.getPlayerStatsData(r[i], 'custom', k)
-                server.execute('scoreboard players set {} {} {}'.format(i, 'deathCounter', data))
-                total = total + data
-            server.execute('scoreboard players set {} {} {}'.format('总死亡数', 'totalList', total))
-            return True
-        else:
-            return False
+        return self.__sync(server, 'custom', {'deaths'}, 'deathCounter', '总死亡数')
 
     def syncTradingCounter(self, server):
-        r = self.loadUUID()
-        if (r):
-            total = 0
-            for i in r:
-                data = 0
-                for k in {'traded_with_villager'}:
-                    if(self.getPlayerStatsData(r[i], 'custom', k)):
-                        data += self.getPlayerStatsData(r[i], 'custom', k)
-                server.execute('scoreboard players set {} {} {}'.format(i, 'tradingCounter', data))
-                total = total + data
-            server.execute('scoreboard players set {} {} {}'.format('总交易数', 'totalList', total))
-            return True
-        else:
-            return False
+        return self.__sync(server, 'custom', {'traded_with_villager'}, 'tradingCounter', '总交易数')
     
     def syncFishingCounter(self, server):
-        r = self.loadUUID()
-        if (r):
-            total = 0
-            for i in r:
-                data = 0
-                for k in {'fish_caught'}:
-                    if(self.getPlayerStatsData(r[i], 'custom', k)):
-                        data += self.getPlayerStatsData(r[i], 'custom', k)
-                server.execute('scoreboard players set {} {} {}'.format(i, 'fishingCounter', data))
-                total = total + data
-            server.execute('scoreboard players set {} {} {}'.format('总钓鱼数', 'totalList', total))
-            return True
-        else:
-            return False   
+        return self.__sync(server, 'custom', {'fish_caught'}, 'fishingCounter', '总钓鱼数')
 
     def syncDamageTaken(self, server):
-        r = self.loadUUID()
-        if (r):
-            total = 0
-            for i in r:
-                data = 0
-                for k in {'damage_taken'}:
-                    if(self.getPlayerStatsData(r[i], 'custom', k)):
-                        data += self.getPlayerStatsData(r[i], 'custom', k)
-                server.execute('scoreboard players set {} {} {}'.format(i, 'damageTaken', data))
-                total = total + data
-            server.execute('scoreboard players set {} {} {}'.format('总受伤害量', 'totalList', total))
-            return True
-        else:
-            return False
+        return self.__sync(server, 'custom', {'damage_taken'}, 'damageTaken', '总受伤害量')
 
     def syncActCounter(self, server):
-        r = self.loadUUID()
-        if (r):
-            total = 0
-            for i in r:
-                data = 0
-                for k in {'play_one_minute'}:
-                    if(self.getPlayerStatsData(r[i], 'custom', k)):
-                        data += self.getPlayerStatsData(r[i], 'custom', k)
-                server.execute('scoreboard players set {} {} {}'.format(i, 'actCounter', data % 72000))
-                server.execute('scoreboard players set {} {} {}'.format(i, 'activation', data // 72000))
-                total = total + data // 72000
-            server.execute('scoreboard players set {} {} {}'.format('总活跃时间', 'totalList', total))
-            return True
-        else:
-            return False
+        return self.__sync(server, 'custom', {'play_one_minute'}, None, '总活跃时间', True)
 
 def on_info(server, info):
     p = fzsDatapackImporter()
@@ -180,16 +114,16 @@ def on_info(server, info):
     config = p.loadJson('./plugins/{}/config.json'.format(p.getSelfName()))
     args = info.content.split(' ')
     arglen = len(args)
-    if (args[0] == '!!fdi'):
+    if (args[0] == config['global']['commandPrefix']):
         if (arglen > 1 and args[1] in config['commandPermissions']):
             if (server.get_permission_level(info) < config['commandPermissions'][args[1]]):
                 server.reply(info, '§aFDI §7>> §c你没有使用该命令的权限!')
                 return
             
             elif (args[1] == 'help' and arglen == 2):
-                server.reply(info, '§a!!fdi help §7- §e获取帮助')
-                server.reply(info, '§a!!fdi refresh §7- §e刷新uuid缓存')
-                server.reply(info, '§a!!fdi process [榜单] §7- §e执行同步')
+                server.reply(info, '§a{} help §7- §e获取帮助'.format(config['global']['commandPrefix']))
+                server.reply(info, '§a{} refresh §7- §e刷新uuid缓存'.format(config['global']['commandPrefix']))
+                server.reply(info, '§a{} process [榜单] §7- §e执行同步'.format(config['global']['commandPrefix']))
                 
             elif (args[1] == 'refresh' and arglen == 2):
                 p.refreshUUID()
@@ -246,4 +180,4 @@ def on_info(server, info):
 
 def on_load(server, old_module):
     fzsDatapackImporter().checkConfig()
-    server.add_help_message('!!fdi help', '哈尔威数据包积分榜数据同步')
+    server.add_help_message('!!fdi help', '哈尔威数据包计分榜数据同步')
